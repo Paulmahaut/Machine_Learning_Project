@@ -41,12 +41,20 @@ def run_prophet_model():
     print("="*60)
     
     model = Prophet(daily_seasonality=False, weekly_seasonality=False, yearly_seasonality=True)
-    model.fit(train)
+    # Catch backend/optimization errors (cmdstan/cmdstanpy can crash on some Windows setups)
+    try:
+        model.fit(train)
+    except Exception as e:
+        import traceback
+        print("⚠️ Prophet a rencontré une erreur pendant l'entraînement:")
+        traceback.print_exc()
+        print("Prophet ne peut pas être exécuté sur cet environnement. Retour à l'exécution sans Prophet.")
+        return None
     
     # Prédictions
     future = model.make_future_dataframe(periods=len(test))
     forecast = model.predict(future)
-    
+
     # Extraire les prédictions pour le test set
     y_pred = forecast['yhat'][-len(test):].values
     y_test = test['y'].values
@@ -59,23 +67,35 @@ def run_prophet_model():
     print(f"RMSE: {rmse:.6f} | MAE: {mae:.6f} | R²: {r2:.6f}\n")
     
     # Visualisation simple
-    plt.figure(figsize=(12, 5))
-    plt.plot(y_test[:100], label='Réel', marker='o')
-    plt.plot(y_pred[:100], label='Prophet', marker='x')
-    plt.title('Prophet - 100 premières prédictions')
-    plt.xlabel('Échantillons')
-    plt.ylabel('Prix EURUSD')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig('prophet_predictions.png')
-    plt.show()
+    try:
+        plt.figure(figsize=(12, 5))
+        plt.plot(y_test[:100], label='Réel', marker='o')
+        plt.plot(y_pred[:100], label='Prophet', marker='x')
+        plt.title('Prophet - 100 premières prédictions')
+        plt.xlabel('Échantillons')
+        plt.ylabel('Prix EURUSD')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig('prophet_predictions.png')
+        plt.show()
+    except Exception:
+        # Non bloquant si affichage impossible (ex: environnement headless)
+        pass
     
+    # Sauvegarder et préparer le dataframe de forecast minimal
+    try:
+        forecast_df = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
+        forecast_df.to_csv('prophet_forecast.csv', index=False)
+    except Exception:
+        forecast_df = forecast[['ds', 'yhat']].copy()
+
     # Retourner les résultats
     return {
         'predictions': y_pred,
         'y_test': y_test,
-        'metrics': {'RMSE': rmse, 'MAE': mae, 'R²': r2}
+        'metrics': {'RMSE': rmse, 'MAE': mae, 'R²': r2},
+        'forecast_df': forecast_df
     }
 
 
