@@ -23,12 +23,7 @@ def run_baseline_models():
     X_train, X_test = X[:train_size], X[train_size:]
     y_train, y_test = y[:train_size], y[train_size:]
     
-    print(f"Taille dataset: {len(df)} | Train: {len(X_train)} | Test: {len(X_test)}\n")
-    
     # Linear Regression
-    print("="*60)
-    print("LINEAR REGRESSION")
-    print("="*60)
     lr = LinearRegression()
     lr.fit(X_train, y_train)
     y_pred_lr = lr.predict(X_test)
@@ -38,14 +33,9 @@ def run_baseline_models():
     mae_lr = mean_absolute_error(y_test, y_pred_lr)
     r2_lr = r2_score(y_test, y_pred_lr)
     
-    print(f"RMSE: {rmse_lr:.6f} | MAE: {mae_lr:.6f} | R²: {r2_lr:.6f}")
     cv_lr = cross_val_score(lr, X_train, y_train, cv=5, scoring='neg_mean_squared_error')
-    print(f"CV RMSE: {np.sqrt(-cv_lr.mean()):.6f} (+/- {np.sqrt(cv_lr.std()):.6f})\n")
     
     # KNN Regression
-    print("="*60)
-    print("KNN REGRESSION")
-    print("="*60)
     knn = KNeighborsRegressor(n_neighbors=5)
     knn.fit(X_train, y_train)
     y_pred_knn = knn.predict(X_test)
@@ -55,9 +45,7 @@ def run_baseline_models():
     mae_knn = mean_absolute_error(y_test, y_pred_knn)
     r2_knn = r2_score(y_test, y_pred_knn)
     
-    print(f"RMSE: {rmse_knn:.6f} | MAE: {mae_knn:.6f} | R²: {r2_knn:.6f}")
     cv_knn = cross_val_score(knn, X_train, y_train, cv=5, scoring='neg_mean_squared_error')
-    print(f"CV RMSE: {np.sqrt(-cv_knn.mean()):.6f} (+/- {np.sqrt(cv_knn.std()):.6f})\n")
     
     # Visualisation
     plt.figure(figsize=(15, 5))
@@ -84,16 +72,12 @@ def run_baseline_models():
     plt.show()
     
     # Résumé
-    print("="*60)
-    print("RÉSUMÉ COMPARATIF")
-    print("="*60)
     results = pd.DataFrame({
         'Modèle': ['Linear Regression', 'KNN Regression'],
         'RMSE': [rmse_lr, rmse_knn],
         'MAE': [mae_lr, mae_knn],
         'R²': [r2_lr, r2_knn]
     })
-    print(results.to_string(index=False))
     
     # Retourner les résultats pour main.py
     return {

@@ -9,11 +9,12 @@ warnings.filterwarnings('ignore')
 
 try:
     from statsmodels.tsa.arima.model import ARIMA
+    from pmdarima import auto_arima
     import matplotlib.pyplot as plt
     ARIMA_AVAILABLE = True
 except ImportError:
     ARIMA_AVAILABLE = False
-    print("⚠️ statsmodels non installé. Installez avec: pip install statsmodels")
+    print("⚠️ statsmodels/pmdarima non installé. Installez avec: pip install statsmodels pmdarima")
 
 
 def run_arima_model():
@@ -26,25 +27,36 @@ def run_arima_model():
     # Chargement des données
     df = load_eurusd_data()
     
-    # Utiliser la colonne Close pour ARIMA
-    ts_data = df['Close']
+    # Utiliser la colonne Close pour ARIMA avec index temporel
+    ts_data = df['Close'].copy()
+    # Réinitialiser l'index pour éviter les warnings
+    ts_data = ts_data.reset_index(drop=True)
     
     # Split temporel (80/20)
     train_size = int(len(ts_data) * 0.8)
     train = ts_data[:train_size]
     test = ts_data[train_size:]
     
-    print(f"Taille dataset: {len(ts_data)} | Train: {len(train)} | Test: {len(test)}\n")
-    
-    # Entraînement du modèle ARIMA
-    print("="*60)
-    print("ARIMA TIME SERIES FORECASTING")
-    print("="*60)
+    # Entraînement du modèle ARIMA avec auto_arima pour trouver les meilleurs paramètres
     
     try:
-        # ARIMA(5,1,0) - ordre simple pour démarrer
-        model = ARIMA(train, order=(5, 1, 0))
-        print("Entraînement du modèle ARIMA en cours...")
+        # Auto ARIMA pour trouver les meilleurs paramètres automatiquement
+        print("Recherche des meilleurs paramètres ARIMA (peut prendre quelques secondes)...")
+        auto_model = auto_arima(
+            train, 
+            start_p=1, start_q=1,
+            max_p=5, max_q=5, max_d=2,
+            seasonal=False,
+            trace=False,
+            error_action='ignore',
+            suppress_warnings=True,
+            stepwise=True
+        )
+        
+        print(f"Meilleurs paramètres trouvés: ARIMA{auto_model.order}")
+        
+        # Utiliser les meilleurs paramètres
+        model = ARIMA(train, order=auto_model.order)
         model_fit = model.fit()
         
         # Prédictions
@@ -62,14 +74,18 @@ def run_arima_model():
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
         
-        print(f"RMSE: {rmse:.6f} | MAE: {mae:.6f} | R²: {r2:.6f}\n")
+        # Calcul de l'accuracy (direction correcte)
+        # Pour la prédiction de séries temporelles, on mesure si on prédit correctement la direction
+        direction_actual = np.diff(y_test) > 0
+        direction_pred = np.diff(y_pred) > 0
+        accuracy = np.mean(direction_actual == direction_pred) * 100
         
         # Visualisation simple
         try:
             plt.figure(figsize=(12, 5))
             plt.plot(y_test[:100], label='Réel', marker='o')
             plt.plot(y_pred[:100], label='ARIMA', marker='x')
-            plt.title('ARIMA - 100 premières prédictions')
+            plt.title(f'ARIMA - 100 premières prédictions | Accuracy: {accuracy:.2f}% | R²: {r2:.4f}')
             plt.xlabel('Échantillons')
             plt.ylabel('Prix EURUSD')
             plt.legend()
@@ -96,7 +112,7 @@ def run_arima_model():
         return {
             'predictions': y_pred,
             'y_test': y_test,
-            'metrics': {'RMSE': rmse, 'MAE': mae, 'R²': r2},
+            'metrics': {'RMSE': rmse, 'MAE': mae, 'R²': r2, 'Accuracy': accuracy},
             'forecast_df': forecast_df
         }
         

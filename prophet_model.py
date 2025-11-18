@@ -8,6 +8,10 @@ from data import load_eurusd_data
 try:
     from prophet import Prophet
     import matplotlib.pyplot as plt
+    import logging
+    # Désactiver les logs verbeux de Prophet
+    logging.getLogger('prophet').setLevel(logging.ERROR)
+    logging.getLogger('cmdstanpy').setLevel(logging.ERROR)
     PROPHET_AVAILABLE = True
 except ImportError:
     PROPHET_AVAILABLE = False
@@ -33,22 +37,26 @@ def run_prophet_model():
     train = df_prophet[:train_size]
     test = df_prophet[train_size:]
     
-    print(f"Taille dataset: {len(df_prophet)} | Train: {len(train)} | Test: {len(test)}\n")
-    
-    # Entraînement du modèle Prophet (simplifié)
-    print("="*60)
-    print("PROPHET TIME SERIES FORECASTING")
-    print("="*60)
-    
-    model = Prophet(daily_seasonality=False, weekly_seasonality=False, yearly_seasonality=True)
-    # Catch backend/optimization errors (cmdstan/cmdstanpy can crash on some Windows setups)
+    # Entraînement du modèle Prophet (configuration simplifiée)
     try:
-        model.fit(train)
+        # Configuration minimaliste pour éviter les erreurs
+        model = Prophet(
+            daily_seasonality=False,
+            weekly_seasonality=False,
+            yearly_seasonality=False,  # Désactivé pour plus de stabilité
+            changepoint_prior_scale=0.05,  # Réduire la sensibilité
+            interval_width=0.95
+        )
+        
+        # Entraînement silencieux
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model.fit(train)
+            
     except Exception as e:
-        import traceback
-        print("⚠️ Prophet a rencontré une erreur pendant l'entraînement:")
-        traceback.print_exc()
-        print("Prophet ne peut pas être exécuté sur cet environnement. Retour à l'exécution sans Prophet.")
+        print(f"⚠️ Prophet a rencontré une erreur: {str(e)[:100]}")
+        print("Prophet ne peut pas être exécuté sur cet environnement.")
         return None
     
     # Prédictions
@@ -64,14 +72,17 @@ def run_prophet_model():
     mae = mean_absolute_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
     
-    print(f"RMSE: {rmse:.6f} | MAE: {mae:.6f} | R²: {r2:.6f}\n")
+    # Calcul de l'accuracy (direction correcte)
+    direction_actual = np.diff(y_test) > 0
+    direction_pred = np.diff(y_pred) > 0
+    accuracy = np.mean(direction_actual == direction_pred) * 100
     
     # Visualisation simple
     try:
         plt.figure(figsize=(12, 5))
         plt.plot(y_test[:100], label='Réel', marker='o')
         plt.plot(y_pred[:100], label='Prophet', marker='x')
-        plt.title('Prophet - 100 premières prédictions')
+        plt.title(f'Prophet - 100 premières prédictions | Accuracy: {accuracy:.2f}% | R²: {r2:.4f}')
         plt.xlabel('Échantillons')
         plt.ylabel('Prix EURUSD')
         plt.legend()
@@ -80,7 +91,6 @@ def run_prophet_model():
         plt.savefig('prophet_predictions.png')
         plt.show()
     except Exception:
-        # Non bloquant si affichage impossible (ex: environnement headless)
         pass
     
     # Sauvegarder et préparer le dataframe de forecast minimal
@@ -94,7 +104,7 @@ def run_prophet_model():
     return {
         'predictions': y_pred,
         'y_test': y_test,
-        'metrics': {'RMSE': rmse, 'MAE': mae, 'R²': r2},
+        'metrics': {'RMSE': rmse, 'MAE': mae, 'R²': r2, 'Accuracy': accuracy},
         'forecast_df': forecast_df
     }
 
