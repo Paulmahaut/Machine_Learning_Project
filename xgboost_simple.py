@@ -92,4 +92,4 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
 
 
 if __name__ == "__main__":
-    run_xgboost("TSLA", "Tesla")
+    run_xgboost("TSLA", "Tesla", prediction_days=5, verbose=True)
