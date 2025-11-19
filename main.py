@@ -1,53 +1,44 @@
-import yfinance as yf
+"""
+ML Project - Prophet vs XGBoost Comparison
+"""
+
+from prophet_algo import run_prophet
+from xgboost_simple import run_xgboost
 import pandas as pd
-import numpy as np
-from sklearn.metrics import mean_absolute_error
-import matplotlib.pyplot as plt
-from prophet import Prophet
 
-# Dataset
-df = yf.download("EURUSD=X", start="2005-01-01", end="2025-01-01")
+# Configuration
+TICKER_FOREX = "EURUSD=X"
+NAME_FOREX = "EUR/USD"
+TICKER_STOCK = "TSLA"
+NAME_STOCK = "Tesla"
 
-# print(df.head())
-# print(df.shape)
+print("\nML Project - Regression Algorithms Comparison")
+print("="*60)
 
-df_prophet = df.reset_index()[['Date','Close']] # Prepare data for Prophet
-df_prophet.columns = ['ds','y'] # ds: date, y: value (seulement 2 colonnes)
+# Test Prophet
+print("\n[1/2] Prophet on EUR/USD...")
+try:
+    prophet_results = run_prophet(TICKER_FOREX, NAME_FOREX, test_years=3, verbose=False)
+    prophet_success = True
+except Exception as e:
+    print("Prophet failed (CmdStan Windows error)")
+    prophet_success = False
+    prophet_results = None
 
-# training and testing split
-train = df_prophet.iloc[:-1095]  
-test = df_prophet.iloc[-1095:]   # on prend 3 ans pour avoir ~20% de test
+# Test XGBoost
+print("\n[2/2] XGBoost on Tesla...")
+xgboost_results = run_xgboost(TICKER_STOCK, NAME_STOCK, prediction_days=5, verbose=False)
 
-model = Prophet()
-model.fit(train)
+# Results
+print("\n" + "="*60)
+print("RESULTS")
+print("="*60)
 
-future = model.make_future_dataframe(len(test))
-forecast = model.predict(future)
+if prophet_success:
+    print(f"\nProphet (EUR/USD):  R²={prophet_results['metrics']['R²']:.4f}  RMSE={prophet_results['metrics']['RMSE']:.6f}")
+    print(f"XGBoost (Tesla):    R²={xgboost_results['metrics']['R²']:.4f}  RMSE=${xgboost_results['metrics']['RMSE']:.2f}")
+else:
+    print(f"\nXGBoost (Tesla):    R²={xgboost_results['metrics']['R²']:.4f}  RMSE=${xgboost_results['metrics']['RMSE']:.2f}")
+    print("Prophet: Failed (Windows CmdStan error)")
 
-pred = forecast[['ds','yhat']].iloc[-len(test):]
-
-# Accuracy metrics
-y_true = test['y'].values
-y_pred = pred['yhat'].values
-
-mae = mean_absolute_error(y_true, y_pred)
-# mse = mean_squared_error(y_true, y_pred)
-# rmse = np.sqrt(mse)
-mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-
-print("MAE:", mae)
-# print("MSE:", mse)
-# print("RMSE:", rmse)
-print("MAPE:", mape, "%")
-
-# Plot the graph
-fig = model.plot(forecast)
-plt.title("EUR/USD Forecast using Prophet (2005–2025)")
-plt.xlabel("Date")
-plt.ylabel("Exchange Rate (EUR/USD)")
-plt.show()
-
-plt.plot(test['ds'], y_true, label="Real")
-plt.plot(pred['ds'], y_pred, label="Predicted")
-plt.legend()
-plt.show()
+print("\nAnalysis complete. Check generated plots.")
