@@ -6,12 +6,13 @@ import matplotlib.pyplot as plt
 from prophet import Prophet
 
 # Dataset
-df = yf.download("EURUSD=X", start="2005-01-01", end="2025-01-01")
+df = yf.download("TTE.PA", start="2005-01-01", end="2025-01-01", progress=False)
 
-# print(df.head())
-# print(df.shape)
+df["Close_5d"] = df["Close"].rolling(window=5).mean()
 
-df_prophet = df.reset_index()[['Date','Close']] # Prepare data for Prophet
+df = df.dropna()
+
+df_prophet = df.reset_index()[['Date','Close_5d']] # Prepare data for Prophet
 df_prophet.columns = ['ds','y'] # ds: date, y: value (seulement 2 colonnes)
 
 # training and testing split
@@ -31,23 +32,25 @@ y_true = test['y'].values
 y_pred = pred['yhat'].values
 
 mae = mean_absolute_error(y_true, y_pred)
-# mse = mean_squared_error(y_true, y_pred)
-# rmse = np.sqrt(mse)
+mse = mean_squared_error(y_true, y_pred)
+rmse = np.sqrt(mse)
 mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
 print("MAE:", mae)
-# print("MSE:", mse)
-# print("RMSE:", rmse)
+print("RMSE:", rmse)
 print("MAPE:", mape, "%")
 
 # Plot the graph
 fig = model.plot(forecast)
-plt.title("EUR/USD Forecast using Prophet (2005–2025)")
+plt.title("TTE.PA - Prophet Forecast on 5-day Rolling Mean")
 plt.xlabel("Date")
-plt.ylabel("Exchange Rate (EUR/USD)")
+plt.ylabel("5-day Average Price (€)")
 plt.show()
 
-plt.plot(test['ds'], y_true, label="Real")
-plt.plot(pred['ds'], y_pred, label="Predicted")
+# Comparison plot (real vs predicted)
+plt.figure(figsize=(12,5))
+plt.plot(test['ds'], y_true, label="Real (5d avg)")
+plt.plot(pred['ds'], y_pred, label="Predicted (5d avg)")
 plt.legend()
+plt.title("Comparison: Real vs Predicted (5d Rolling Mean)")
 plt.show()
