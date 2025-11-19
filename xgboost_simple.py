@@ -13,19 +13,7 @@ warnings.filterwarnings('ignore')
 
 
 def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
-    """
-    Run XGBoost for price prediction
-    
-    Args:
-        ticker: Stock symbol
-        name: Display name
-        prediction_days: Prediction horizon (default: 5 days)
-        verbose: Print detailed output (default: True)
-    
-    Returns:
-        dict with results (metrics, predictions, etc.)
-    """
-    
+
     # Download data
     df = yf.download(ticker, start="2015-01-01", end="2025-01-01", progress=False)
     
@@ -93,3 +81,5 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
 
 if __name__ == "__main__":
     run_xgboost("TSLA", "Tesla", prediction_days=5, verbose=True)
+
+#    run_xgboost("EURUSD=X", "EUR/USD", prediction_days=5, verbose=True)
