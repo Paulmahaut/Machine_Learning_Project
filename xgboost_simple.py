@@ -62,6 +62,8 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     if ticker != "EURUSD=X":
         features.extend(['Volume_MA', 'Volume_Ratio'])
     
+    features = ['MA_5', 'MA_20', 'Lag_1', 'Lag_2', 'Lag_3', 'Volatility']# add more features and deep learning
+     
     X = df[features]
     y = df['Target']
     
@@ -85,34 +87,3 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     
     # Visualization
     plt.figure(figsize=(12, 6))
-    plt.plot(y_test.values, label='Actual', linewidth=2)
-    plt.plot(predictions, label='XGBoost', linewidth=2, alpha=0.7)
-    plt.title(f'{name} - XGBoost Predictions ({prediction_days} days)\nR² = {r2:.4f}', 
-              fontsize=14, fontweight='bold')
-    plt.xlabel('Test days')
-    plt.ylabel('Price ($)')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    
-    filename = f'{ticker}_xgboost.png'
-    plt.savefig(filename, dpi=150)
-    if verbose:
-        print(f"Saved: {filename}")
-    plt.show()
-    
-    return {
-        'model': model,
-        'predictions': predictions,
-        'y_true': y_test.values,
-        'metrics': {
-            'RMSE': rmse,
-            'R²': r2
-        }
-    }
-
-
-if __name__ == "__main__":
-    run_xgboost("TSLA", "Tesla", prediction_days=5, verbose=True)
-
-#    run_xgboost("EURUSD=X", "EUR/USD", prediction_days=5, verbose=True)
