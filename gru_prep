@@ -1,78 +1,231 @@
-# gru_prep.py
+"""
+GRU Data Preparation for Tesla Stock Prediction
+================================================
+Ce script prépare les données pour un réseau GRU (Gated Recurrent Unit).
+
+Différence clé avec XGBoost:
+- XGBoost: chaque ligne = 1 prédiction indépendante
+- GRU: chaque prédiction utilise une SÉQUENCE de N jours précédents
+
+Exemple: pour prédire le prix du jour 100, GRU regarde les jours 70-99 (séquence de 30)
+"""
+
+import yfinance as yf
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import joblib
 
-# --------- LOAD enriched CSV (généré par le script XGBoost) ----------
-df = pd.read_csv("tte_features.csv", index_col=0, parse_dates=True)
 
-# On s'assure que la colonne Target existe
-if 'Target' not in df.columns:
-    raise ValueError("Le fichier tte_features.csv doit contenir 'Target'")
+# ========== STEP 1: Télécharger et créer les features (comme XGBoost v2) ==========
+print("📥 Téléchargement données Tesla...")
+df = yf.download("TSLA", start="2015-01-01", end="2025-01-01", progress=False)
 
-# Liste de features à utiliser (identique à XGBoost)
+if isinstance(df.columns, pd.MultiIndex):
+    df.columns = df.columns.get_level_values(0)
+
+print(f"✅ {len(df)} jours téléchargés")
+
+
+# ========== STEP 2: Créer les features (identiques à xgboost_simple2.py) ==========
+print("🔧 Création des 24 features...")
+
+# Base features
+df['MA_5'] = df['Close'].rolling(5).mean()
+df['MA_20'] = df['Close'].rolling(20).mean()
+df['Lag_1'] = df['Close'].shift(1)
+df['Lag_2'] = df['Close'].shift(2)
+df['Lag_3'] = df['Close'].shift(3)
+df['Volatility'] = df['Close'].pct_change().rolling(20).std()
+
+# Bollinger Bands
+ma20 = df['Close'].rolling(20).mean()
+std20 = df['Close'].rolling(20).std()
+df['BB_upper'] = ma20 + 2 * std20
+df['BB_lower'] = ma20 - 2 * std20
+df['BB_width'] = df['BB_upper'] - df['BB_lower']
+df['BB_position'] = (df['Close'] - df['BB_lower']) / (df['BB_upper'] - df['BB_lower'])
+
+# Price Changes
+df['Price_change_1d'] = df['Close'].diff(1)
+df['Price_change_3d'] = df['Close'].diff(3)
+df['Price_pct_1d'] = df['Close'].pct_change(1)
+df['Price_pct_3d'] = df['Close'].pct_change(3)
+
+# Rate of Change
+df['RoC_5'] = df['Close'].pct_change(5)
+df['RoC_10'] = df['Close'].pct_change(10)
+
+# Momentum
+df['Momentum_5'] = df['Close'] - df['Close'].shift(5)
+df['Momentum_10'] = df['Close'] - df['Close'].shift(10)
+
+# MACD
+df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
+df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
+df['MACD'] = df['EMA_12'] - df['EMA_26']
+df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+df['MACD_hist'] = df['MACD'] - df['MACD_signal']
+
+# ATR
+df['H-L'] = df['High'] - df['Low']
+df['H-PC'] = (df['High'] - df['Close'].shift(1)).abs()
+df['L-PC'] = (df['Low'] - df['Close'].shift(1)).abs()
+df['TR'] = df[['H-L','H-PC','L-PC']].max(axis=1)
+df['ATR'] = df['TR'].rolling(14).mean()
+
+# Volume
+df['Volume_MA_5'] = df['Volume'].rolling(5).mean()
+df['Volume_Ratio'] = df['Volume'] / df['Volume_MA_5']
+
+# Target (5 jours à l'avance)
+df['Target'] = df['Close'].shift(-5)
+
+# Liste des 24 features
 features = [
-    'MA_5','MA_20','MA_50',
-    'EMA_12','EMA_26',
-    'MACD','MACD_signal','MACD_hist',
-    'RSI','RoC_5','RoC_10',
-    'BB_width','BB_position',
+    'MA_5', 'MA_20', 'Lag_1', 'Lag_2', 'Lag_3', 'Volatility',
+    'BB_width', 'BB_position',
+    'Price_change_1d', 'Price_change_3d', 'Price_pct_1d', 'Price_pct_3d',
+    'RoC_5', 'RoC_10',
+    'Momentum_5', 'Momentum_10',
+    'MACD', 'MACD_signal', 'MACD_hist',
     'ATR',
-    'Rolling_std_20','Rolling_min_20','Rolling_max_20',
-    'Rolling_skew_20','Rolling_kurt_20',
-    'Lag_1','Lag_2','Lag_3','Lag_5','Lag_10','Lag_20',
-    'Day','Month','Weekday','Is_month_end'
+    'Volume_MA_5', 'Volume_Ratio',
+    'EMA_12', 'EMA_26'
 ]
-if 'Volume' in df.columns:
-    features += ['Volume','Volume_MA_5','Volume_Ratio']
-features = [f for f in features if f in df.columns]
 
-# Drop lignes NA si restées
-df = df.dropna(subset=features + ['Target'])
+# Supprimer les NaN
+df = df.dropna()
+print(f"✅ Features créées, {len(df)} jours valides après nettoyage")
 
-# Train/test split (identique à XGBoost)
-test_ratio = 0.2
-split_idx = int((1 - test_ratio) * len(df))
+
+# ========== STEP 3: Split Train/Test (chronologique 80/20) ==========
+split_idx = int(len(df) * 0.8)
 df_train = df.iloc[:split_idx]
-df_test  = df.iloc[split_idx:]
+df_test = df.iloc[split_idx:]
 
-# Scaling (important pour réseaux)
+print(f"📊 Train: {len(df_train)} jours | Test: {len(df_test)} jours")
+
+
+# ========== STEP 4: Normalisation (CRUCIAL pour réseaux de neurones) ==========
+"""
+Pourquoi normaliser?
+- Les features ont des échelles différentes (prix en $, volume en millions, % en 0-1)
+- Les réseaux de neurones apprennent mieux avec des valeurs entre -1 et 1
+- StandardScaler: transforme chaque feature pour avoir moyenne=0 et écart-type=1
+
+Formule: x_scaled = (x - moyenne) / écart-type
+"""
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(df_train[features])
-X_test_scaled  = scaler.transform(df_test[features])
+X_train_scaled = scaler.fit_transform(df_train[features])  # Fit sur train uniquement!
+X_test_scaled = scaler.transform(df_test[features])        # Applique la même transformation
 
-# Save scaler for later
-joblib.dump(scaler, "scaler_tte.joblib")
+# Sauvegarder le scaler (pour faire des prédictions futures)
+joblib.dump(scaler, "scaler_tsla.joblib")
+print("✅ Données normalisées et scaler sauvegardé")
 
-# We will build sequences for GRU
-sequence_length = 30  # window size
 
-def build_sequences(X_scaled, y, seq_len):
-    Xs, ys = [], []
+# ========== STEP 5: Créer les séquences pour GRU ==========
+"""
+GRU = réseau récurrent qui "se souvient" des jours précédents
+
+Concept de séquence:
+- Au lieu de donner 1 jour → prédire prix futur
+- On donne 30 jours → prédire prix futur
+- Le GRU lit ces 30 jours un par un et "mémorise" les patterns
+
+Exemple concret:
+  Séquence 1: jours 1-30   → prédit jour 30+5 = jour 35
+  Séquence 2: jours 2-31   → prédit jour 31+5 = jour 36
+  Séquence 3: jours 3-32   → prédit jour 32+5 = jour 37
+  ...
+
+IMPORTANT: On utilise une fenêtre glissante (sliding window)
+"""
+SEQUENCE_LENGTH = 30  # Nombre de jours dans chaque séquence
+
+
+def build_sequences(X_scaled, y_values, seq_len):
+    """
+    Construit des séquences temporelles à partir des features normalisées
+    
+    Parameters:
+    -----------
+    X_scaled : array (n_days, n_features)
+        Features normalisées
+    y_values : array (n_days,)
+        Valeurs cibles
+    seq_len : int
+        Longueur de chaque séquence
+    
+    Returns:
+    --------
+    X_sequences : array (n_sequences, seq_len, n_features)
+        Séquences 3D pour le GRU
+    y_sequences : array (n_sequences,)
+        Cibles correspondantes
+    """
+    X_sequences = []
+    y_sequences = []
+    
+    # Pour chaque position possible dans les données
     for i in range(len(X_scaled) - seq_len + 1):
-        Xs.append(X_scaled[i:i+seq_len])
-        ys.append(y[i+seq_len-1])  # predict based on last element of window
-    return np.array(Xs), np.array(ys)
+        # Extraire une fenêtre de seq_len jours
+        sequence = X_scaled[i : i + seq_len]
+        # La cible = prix futur du dernier jour de la séquence
+        target = y_values[i + seq_len - 1]
+        
+        X_sequences.append(sequence)
+        y_sequences.append(target)
+    
+    return np.array(X_sequences), np.array(y_sequences)
 
-# For training: we must use continuous slices; ensure matching indices
+
+# Créer les séquences pour le train
 y_train = df_train['Target'].values
-y_test  = df_test['Target'].values
+X_train_seq, y_train_seq = build_sequences(X_train_scaled, y_train, SEQUENCE_LENGTH)
 
-# Because we built sequences from start of dataset, adjust arrays indexes accordingly
-X_train_seq, y_train_seq = build_sequences(X_train_scaled, y_train, sequence_length)
-# For test sequences: we need to use the tail of the training frames + test frames to form sequences
-# Simpler: build sequences on the concatenation of last (seq_len-1) train rows + test rows
-tail = X_train_scaled[-(sequence_length-1):] if sequence_length-1 > 0 else np.empty((0, X_train_scaled.shape[1]))
-X_test_concat = np.vstack([tail, X_test_scaled])
-y_test_concat = np.concatenate([df_train['Target'].values[-(sequence_length-1):], y_test]) if sequence_length-1 > 0 else y_test
-X_test_seq, y_test_seq = build_sequences(X_test_concat, y_test_concat, sequence_length)
+print(f"🔄 Train sequences: {X_train_seq.shape}")
+print(f"   └─ {X_train_seq.shape[0]} séquences de {X_train_seq.shape[1]} jours avec {X_train_seq.shape[2]} features")
 
-print("GRU shapes:", X_train_seq.shape, y_train_seq.shape, X_test_seq.shape, y_test_seq.shape)
 
-# Save prepared arrays
+# ========== STEP 6: Séquences de test (ATTENTION: continuité temporelle) ==========
+"""
+PIÈGE à éviter:
+- Si on crée les séquences test indépendamment, la première séquence test 
+  n'aura pas accès aux derniers jours du train
+- Or en réalité, pour prédire le jour 2001, on a besoin des jours 1971-2000
+
+Solution:
+- Concaténer les 29 derniers jours du train avec le test
+- Ainsi la première séquence test utilise: [train[-29:], test[0]] → 30 jours
+"""
+# Prendre les (SEQUENCE_LENGTH-1) derniers jours du train
+tail_train = X_train_scaled[-(SEQUENCE_LENGTH - 1):]
+y_tail_train = df_train['Target'].values[-(SEQUENCE_LENGTH - 1):]
+
+# Concaténer avec le test
+X_test_concat = np.vstack([tail_train, X_test_scaled])
+y_test_concat = np.concatenate([y_tail_train, df_test['Target'].values])
+
+# Créer les séquences
+X_test_seq, y_test_seq = build_sequences(X_test_concat, y_test_concat, SEQUENCE_LENGTH)
+
+print(f"🔄 Test sequences: {X_test_seq.shape}")
+print(f"   └─ {X_test_seq.shape[0]} séquences de {X_test_seq.shape[1]} jours avec {X_test_seq.shape[2]} features")
+
+
+# ========== STEP 7: Sauvegarder les données préparées ==========
 np.save("X_train_seq.npy", X_train_seq)
 np.save("y_train_seq.npy", y_train_seq)
 np.save("X_test_seq.npy", X_test_seq)
 np.save("y_test_seq.npy", y_test_seq)
+
+print("\n✅ Préparation terminée!")
+print(f"📁 Fichiers sauvegardés:")
+print(f"   - X_train_seq.npy: {X_train_seq.shape}")
+print(f"   - y_train_seq.npy: {y_train_seq.shape}")
+print(f"   - X_test_seq.npy: {X_test_seq.shape}")
+print(f"   - y_test_seq.npy: {y_test_seq.shape}")
+print(f"   - scaler_tsla.joblib")
+print(f"\n➡️ Prochaine étape: exécuter gru_train.py")
