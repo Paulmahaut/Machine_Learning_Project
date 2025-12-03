@@ -15,7 +15,7 @@ warnings.filterwarnings('ignore')
 def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
 
     # Download data
-    df = yf.download(ticker, start="2015-01-01", end="2025-01-01", progress=False)
+    df = yf.download(ticker, start="2015-01-01", end="2025-01-01", progress=False)  # df = DataFrame contenant les données historiques du titre
     
     # Flatten MultiIndex columns if present
     if isinstance(df.columns, pd.MultiIndex):
@@ -35,10 +35,10 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     df['Volatility'] = df['Close'].pct_change().rolling(20).std()
     
     # RSI (Relative Strength Index)
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
+    delta = df['Close'].diff()  # delta = variation du prix d'un jour à l'autre
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()  # gain = moyenne des hausses sur 14 jours
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()  # loss = moyenne des baisses sur 14 jours
+    rs = gain / loss  # rs = ratio entre gains et pertes (Relative Strength)
     df['RSI'] = 100 - (100 / (1 + rs))
     
     # Rate of Change (momentum)
@@ -64,10 +64,10 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     
     features = ['MA_5', 'MA_20', 'Lag_1', 'Lag_2', 'Lag_3', 'Volatility']# add more features and deep learning
      
-    X = df[features]
-    y = df['Target']
+    X = df[features]  # X = matrice des features (variables explicatives)
+    y = df['Target']  # y = variable cible (prix à prédire)
     
-    split = int(len(X) * 0.8)
+    split = int(len(X) * 0.8)  # split = index de séparation train/test (80% des données)
     X_train, X_test = X[:split], X[split:]
     y_train, y_test = y[:split], y[split:]
     
@@ -79,8 +79,8 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     predictions = model.predict(X_test)
     
     # Metrics
-    rmse = np.sqrt(mean_squared_error(y_test, predictions))
-    r2 = r2_score(y_test, predictions)
+    rmse = np.sqrt(mean_squared_error(y_test, predictions))  # rmse = erreur moyenne en dollars (Root Mean Squared Error)
+    r2 = r2_score(y_test, predictions)  # r2 = coefficient de détermination (proportion de variance expliquée, 0-1)
     
     if verbose:
         print(f"XGBoost Results: R²={r2:.4f} | RMSE=${rmse:.2f} | Train={len(X_train)}d | Test={len(X_test)}d")
