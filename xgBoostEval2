@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # ---------- CONFIG ----------
-INPUT_FILE = "TotalEnergies_2005_2025.xlsx"
+INPUT_FILE = "Tesla_2005_2025.xlsx"
 OUTPUT_FEATURES_CSV = "tte_features.csv"
 OUTPUT_MODEL = "tte_xgb_model.joblib"
 PREDICTION_DAYS = 1   # horizon
