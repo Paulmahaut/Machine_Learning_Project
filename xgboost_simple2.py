@@ -123,69 +123,19 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     r2 = r2_score(y_test, predictions)
     
     if verbose:
-        print(f"\n{'='*80}")
-        print(f"📊 {name} ({ticker}) - XGBoost v2 TESLA (24 optimized features)")
-        print(f"{'='*80}")
-        print(f"R²   = {r2:.4f}")
-        print(f"RMSE = ${rmse:.2f}")
-        print(f"MAE  = ${mae:.2f}")
-        print(f"Train: {len(X_train)} days | Test: {len(X_test)} days")
-        print(f"Prediction horizon: {prediction_days} day(s)")
-        print(f"{'='*80}\n")
-        
-        # Feature importance
-        importances = model.feature_importances_
-        feature_imp_df = pd.DataFrame({
-            'Feature': features,
-            'Importance': importances
-        }).sort_values('Importance', ascending=False)
-        
-        print("🎯 Top 10 Features by importance:")
-        print(feature_imp_df.head(10).to_string(index=False))
-        print()
+        print(f"XGBoost Results: R²={r2:.4f} | RMSE=${rmse:.2f} | Train={len(X_train)}d | Test={len(X_test)}d")
     
     # Visualization
-    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
-    
-    # Plot 1: Predictions vs Real
-    axes[0, 0].plot(y_test.values, label='Real Price', alpha=0.7, linewidth=2, color='blue')
-    axes[0, 0].plot(predictions, label='Predictions', alpha=0.7, linestyle='--', linewidth=2, color='orange')
-    axes[0, 0].set_title(f'{name} - Predictions vs Real Price', fontsize=14, fontweight='bold')
-    axes[0, 0].set_xlabel('Days (test set)')
-    axes[0, 0].set_ylabel('Price ($)')
-    axes[0, 0].legend()
-    axes[0, 0].grid(alpha=0.3)
-    
-    # Plot 2: Residuals
-    residuals = y_test.values - predictions
-    axes[0, 1].scatter(predictions, residuals, alpha=0.5, color='red')
-    axes[0, 1].axhline(y=0, color='black', linestyle='--', linewidth=2)
-    axes[0, 1].set_title('Residuals (Prediction Errors)', fontsize=14, fontweight='bold')
-    axes[0, 1].set_xlabel('Predictions ($)')
-    axes[0, 1].set_ylabel('Residuals ($)')
-    axes[0, 1].grid(alpha=0.3)
-    
-    # Plot 3: Feature Importance
-    feature_imp_sorted = feature_imp_df.sort_values('Importance', ascending=True).tail(15)
-    axes[1, 0].barh(feature_imp_sorted['Feature'], feature_imp_sorted['Importance'], color='skyblue')
-    axes[1, 0].set_xlabel('Importance', fontsize=12)
-    axes[1, 0].set_title('Top 15 Feature Importance', fontsize=14, fontweight='bold')
-    axes[1, 0].grid(axis='x', alpha=0.3)
-    
-    # Plot 4: Error Distribution
-    axes[1, 1].hist(residuals, bins=30, alpha=0.7, color='green', edgecolor='black')
-    axes[1, 1].axvline(x=0, color='red', linestyle='--', linewidth=2)
-    axes[1, 1].set_title('Error Distribution', fontsize=14, fontweight='bold')
-    axes[1, 1].set_xlabel('Error ($)')
-    axes[1, 1].set_ylabel('Frequency')
-    axes[1, 1].grid(alpha=0.3)
-    
+    plt.figure(figsize=(12, 6))
+    plt.plot(y_test.values, label='Real Price', alpha=0.7, linewidth=2)
+    plt.plot(predictions, label='Predictions', alpha=0.7, linestyle='--', linewidth=2)
+    plt.title(f'{name} - Stock Price Prediction (R²={r2:.4f}) with 24 features', fontsize=14, fontweight='bold')
+    plt.xlabel('Days (test set)')
+    plt.ylabel('Price ($)')
+    plt.legend()
+    plt.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(f'{ticker}_xgboost_v2_tsla_optimized.png', dpi=150, bbox_inches='tight')
-    
-    if verbose:
-        print(f"✅ Chart saved: {ticker}_xgboost_v2_tsla_optimized.png\n")
-    
+    plt.savefig(f'{ticker}_xgboost_v2.png', dpi=150, bbox_inches='tight')
     plt.show()
     
     return {
@@ -194,23 +144,11 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
         'y_test': y_test,
         'r2': r2,
         'rmse': rmse,
-        'mae': mae,
-        'feature_importance': feature_imp_df
+        'mae': mae
     }
 
 
 if __name__ == "__main__":
     # Test on Tesla
-    print("\n🚀 XGBoost Simple v2 TESLA - Optimized for Tesla")
-    print("Features: 24 (6 base + 18 TESLA-validated features)")
-    
     results_tesla = run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True)
-    
-    print(f"\n{'='*80}")
-    print("🎉 IMPROVEMENT vs Eval2:")
-    print(f"{'='*80}")
-    print(f"Eval2 (6 features):  R²=0.7874, RMSE=$26.80")
-    print(f"v2 TSLA (24 features): R²={results_tesla['r2']:.4f}, RMSE=${results_tesla['rmse']:.2f}")
-    print(f"Δ R²   = {results_tesla['r2'] - 0.7874:+.4f}  {'✅ BETTER!' if results_tesla['r2'] > 0.7874 else '❌ Worse'}")
-    print(f"Δ RMSE = ${results_tesla['rmse'] - 26.80:+.2f}  {'✅ BETTER!' if results_tesla['rmse'] < 26.80 else '❌ Worse'}")
-    print(f"{'='*80}\n")
+
