@@ -1,6 +1,6 @@
 """
-XGBoost Simple v2 - Optimized version with relevant features
-Based on xgboost_simple.py + features validated by test_all_features.py
+XGBoost Simple v2 TESLA - Optimized version with TESLA-specific features
+Based on test_all_features_tsla.py analysis
 """
 
 import yfinance as yf
@@ -35,24 +35,46 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     # Volatility
     df['Volatility'] = df['Close'].pct_change().rolling(20).std()
     
-    # ========== NEW RELEVANT FEATURES ==========
-    # ✅ Rolling Statistics (best improvement: +0.0498 R²)
-    df['Rolling_std_20'] = df['Close'].rolling(20).std()
-    df['Rolling_min_20'] = df['Close'].rolling(20).min()
-    df['Rolling_max_20'] = df['Close'].rolling(20).max()
-    df['Rolling_skew_20'] = df['Close'].rolling(20).skew()
-    df['Rolling_kurt_20'] = df['Close'].rolling(20).kurt()
+    # ========== TESLA-OPTIMIZED FEATURES (tested and validated) ==========
+    # ✅ Bollinger Bands (best improvement: +0.0425 R²)
+    ma20 = df['Close'].rolling(20).mean()
+    std20 = df['Close'].rolling(20).std()
+    df['BB_upper'] = ma20 + 2 * std20
+    df['BB_lower'] = ma20 - 2 * std20
+    df['BB_width'] = df['BB_upper'] - df['BB_lower']
+    df['BB_position'] = (df['Close'] - df['BB_lower']) / (df['BB_upper'] - df['BB_lower'])
     
-    # ✅ RSI - Relative Strength Index (improvement: +0.0453 R²)
-    delta = df['Close'].diff()
-    gain = delta.clip(lower=0).rolling(14).mean()
-    loss = (-delta.clip(upper=0)).rolling(14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
+    # ✅ Price Changes (improvement: +0.0420 R²)
+    df['Price_change_1d'] = df['Close'].diff(1)
+    df['Price_change_3d'] = df['Close'].diff(3)
+    df['Price_pct_1d'] = df['Close'].pct_change(1)
+    df['Price_pct_3d'] = df['Close'].pct_change(3)
     
-    # ✅ Additional Volatility (improvement: +0.0170 R²)
-    df['Volatility_5'] = df['Close'].rolling(5).std()
-    df['Volatility_20_alt'] = df['Close'].rolling(20).std()
+    # ✅ Rate of Change (improvement: +0.0333 R²)
+    df['RoC_5'] = df['Close'].pct_change(5)
+    df['RoC_10'] = df['Close'].pct_change(10)
+    
+    # ✅ Momentum (improvement: +0.0313 R²)
+    df['Momentum_5'] = df['Close'] - df['Close'].shift(5)
+    df['Momentum_10'] = df['Close'] - df['Close'].shift(10)
+    
+    # ✅ MACD (improvement: +0.0201 R²)
+    df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
+    df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = df['EMA_12'] - df['EMA_26']
+    df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    df['MACD_hist'] = df['MACD'] - df['MACD_signal']
+    
+    # ✅ ATR (improvement: +0.0179 R²)
+    df['H-L'] = df['High'] - df['Low']
+    df['H-PC'] = (df['High'] - df['Close'].shift(1)).abs()
+    df['L-PC'] = (df['Low'] - df['Close'].shift(1)).abs()
+    df['TR'] = df[['H-L','H-PC','L-PC']].max(axis=1)
+    df['ATR'] = df['TR'].rolling(14).mean()
+    
+    # ✅ Volume (improvement: +0.0159 R²)
+    df['Volume_MA_5'] = df['Volume'].rolling(5).mean()
+    df['Volume_Ratio'] = df['Volume'] / df['Volume_MA_5']
     
     # Target variable (price to predict)
     df['Target'] = df['Close'].shift(-prediction_days)
@@ -62,14 +84,24 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     features = [
         # Base features (6)
         'MA_5', 'MA_20', 'Lag_1', 'Lag_2', 'Lag_3', 'Volatility',
-        # Rolling Stats (5)
-        'Rolling_std_20', 'Rolling_min_20', 'Rolling_max_20', 'Rolling_skew_20', 'Rolling_kurt_20',
-        # RSI (1)
-        'RSI',
-        # Additional Volatility (2)
-        'Volatility_5', 'Volatility_20_alt'
+        # Bollinger Bands (2)
+        'BB_width', 'BB_position',
+        # Price Changes (4)
+        'Price_change_1d', 'Price_change_3d', 'Price_pct_1d', 'Price_pct_3d',
+        # RoC (2)
+        'RoC_5', 'RoC_10',
+        # Momentum (2)
+        'Momentum_5', 'Momentum_10',
+        # MACD (3)
+        'MACD', 'MACD_signal', 'MACD_hist',
+        # ATR (1)
+        'ATR',
+        # Volume (2)
+        'Volume_MA_5', 'Volume_Ratio',
+        # EMA (2)
+        'EMA_12', 'EMA_26'
     ]
-    # Total: 14 optimal features
+    # Total: 24 TESLA-optimized features
      
     X = df[features]
     y = df['Target']
@@ -92,7 +124,7 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     
     if verbose:
         print(f"\n{'='*80}")
-        print(f"📊 {name} ({ticker}) - XGBoost v2 (14 optimized features)")
+        print(f"📊 {name} ({ticker}) - XGBoost v2 TESLA (24 optimized features)")
         print(f"{'='*80}")
         print(f"R²   = {r2:.4f}")
         print(f"RMSE = ${rmse:.2f}")
@@ -134,10 +166,10 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     axes[0, 1].grid(alpha=0.3)
     
     # Plot 3: Feature Importance
-    feature_imp_sorted = feature_imp_df.sort_values('Importance', ascending=True)
+    feature_imp_sorted = feature_imp_df.sort_values('Importance', ascending=True).tail(15)
     axes[1, 0].barh(feature_imp_sorted['Feature'], feature_imp_sorted['Importance'], color='skyblue')
     axes[1, 0].set_xlabel('Importance', fontsize=12)
-    axes[1, 0].set_title('Feature Importance (14 features)', fontsize=14, fontweight='bold')
+    axes[1, 0].set_title('Top 15 Feature Importance', fontsize=14, fontweight='bold')
     axes[1, 0].grid(axis='x', alpha=0.3)
     
     # Plot 4: Error Distribution
@@ -149,10 +181,10 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
     axes[1, 1].grid(alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f'{ticker}_xgboost_v2_results.png', dpi=150, bbox_inches='tight')
+    plt.savefig(f'{ticker}_xgboost_v2_tsla_optimized.png', dpi=150, bbox_inches='tight')
     
     if verbose:
-        print(f"✅ Chart saved: {ticker}_xgboost_v2_results.png\n")
+        print(f"✅ Chart saved: {ticker}_xgboost_v2_tsla_optimized.png\n")
     
     plt.show()
     
@@ -168,12 +200,17 @@ def run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True):
 
 
 if __name__ == "__main__":
-    # Test on TotalEnergies
-    print("\n🚀 XGBoost Simple v2 - Optimized Version")
-    print("Features: 14 (6 base + 8 new relevant features)")
+    # Test on Tesla
+    print("\n🚀 XGBoost Simple v2 TESLA - Optimized for Tesla")
+    print("Features: 24 (6 base + 18 TESLA-validated features)")
     
-    results_tte = run_xgboost(ticker="TTE.PA", name="TotalEnergies", prediction_days=5, verbose=True)
+    results_tesla = run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True)
     
-    # Optional: test on other assets
-    # results_tesla = run_xgboost(ticker="TSLA", name="Tesla", prediction_days=5, verbose=True)
-    # results_apple = run_xgboost(ticker="AAPL", name="Apple", prediction_days=5, verbose=True)
+    print(f"\n{'='*80}")
+    print("🎉 IMPROVEMENT vs Eval2:")
+    print(f"{'='*80}")
+    print(f"Eval2 (6 features):  R²=0.7874, RMSE=$26.80")
+    print(f"v2 TSLA (24 features): R²={results_tesla['r2']:.4f}, RMSE=${results_tesla['rmse']:.2f}")
+    print(f"Δ R²   = {results_tesla['r2'] - 0.7874:+.4f}  {'✅ BETTER!' if results_tesla['r2'] > 0.7874 else '❌ Worse'}")
+    print(f"Δ RMSE = ${results_tesla['rmse'] - 26.80:+.2f}  {'✅ BETTER!' if results_tesla['rmse'] < 26.80 else '❌ Worse'}")
+    print(f"{'='*80}\n")
