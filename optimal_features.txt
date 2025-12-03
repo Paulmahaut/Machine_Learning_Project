@@ -1,0 +1,17 @@
+# FEATURES OPTIMALES - XGBoost TotalEnergies
+# R² = -0.6191 | RMSE = $5.66
+
+MA_5
+MA_20
+Lag_1
+Lag_2
+Lag_3
+Volatility
+Rolling_std_20
+Rolling_min_20
+Rolling_max_20
+Rolling_skew_20
+Rolling_kurt_20
+RSI
+Volatility_5
+Volatility_20_alt
