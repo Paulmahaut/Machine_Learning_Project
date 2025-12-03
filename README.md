@@ -2,6 +2,9 @@
 
 Project objectives
 
+Documentation
+- See `docs/xgboost_simple2_explained.md` for a detailed, line-by-line learning guide of the main model (`xgboost_simple2.py`).
+
 The objective of the project is to give students the opportunity to work on real-word dataset. The goal is to apply
 different machine learning algorithms and to explore new techniques even though not covered in the course.
 The project should allow to students to :
