@@ -1,0 +1,27 @@
+# OPTIMAL FEATURES - XGBoost TESLA
+# R² = 0.8043 | RMSE = $25.35
+
+MA_5
+MA_20
+Lag_1
+Lag_2
+Lag_3
+Volatility
+BB_width
+BB_position
+Price_change_1d
+Price_change_3d
+Price_pct_1d
+Price_pct_3d
+RoC_5
+RoC_10
+Momentum_5
+Momentum_10
+MACD
+MACD_signal
+MACD_hist
+ATR
+Volume_MA_5
+Volume_Ratio
+EMA_12
+EMA_26
